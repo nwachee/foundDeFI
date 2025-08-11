@@ -27,10 +27,10 @@ import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/** 
+/**
  * @title DSCEngine
  * @author Nwachee
- * 
+ *
  * The system is designed to be as minimal as possible, and have the tokens maintain a 1 token == $1 peg at all times.
  * This is a stablecoin with the properties:
  * - Exogenously Collateralized
@@ -46,7 +46,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * for minting and redeeming DSC, as well as depositing and withdrawing collateral.
  * @notice This contract is based on the MakerDAO DSS system
  */
-
 contract DSCEngine is ReentrancyGuard {
     error DSCEngine__NotZeroAddress();
     error DSCEngine__TransferFailed();
@@ -61,9 +60,8 @@ contract DSCEngine is ReentrancyGuard {
 
     event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
 
-
     modifier morethanZero(uint256 amount) {
-        if (amount <= 0){
+        if (amount <= 0) {
             revert DSCEngine__CollateralMustBeGreaterThanZero();
         }
         _;
@@ -77,25 +75,30 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     constructor(address[] memory tokenAddresses, address[] memory priceFeedAddress, address dscAddress) {
-        if(tokenAddresses.length != priceFeedAddress.length){
+        if (tokenAddresses.length != priceFeedAddress.length) {
             revert DSCEngine__TokenAndPriceFeedAddressMustBeSameLenght();
         }
 
-        for(uint256 i = 0; i < tokenAddresses.length; i++) {
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
             s_priceFeed[tokenAddresses[i]] = priceFeedAddress[i];
         }
         i_dsc = DecentralizedStableCoin(dscAddress);
     }
 
-    function depositCollateralAndMintDsc() external{}
+    function depositCollateralAndMintDsc() external {}
 
-    /** 
+    /**
      * @notice Follows CEI.
      * @param tokenCollateralAddress The address of the collateral token to deposit
      * @param amountCollateral amount of collateral to deposit
      * @notice This function allows users to deposit collateral and mint DSC in a single transaction.
      */
-    function depositCollateral(address tokenCollateralAddress, uint256 amountCollateral) external morethanZero(amountCollateral) isTokenAllowed(tokenCollateralAddress) nonReentrant {
+    function depositCollateral(address tokenCollateralAddress, uint256 amountCollateral)
+        external
+        morethanZero(amountCollateral)
+        isTokenAllowed(tokenCollateralAddress)
+        nonReentrant
+    {
         s_collateralDeposit[msg.sender][tokenCollateralAddress] += amountCollateral;
         emit CollateralDeposited(msg.sender, tokenCollateralAddress, amountCollateral);
         bool success = IERC20(tokenCollateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
@@ -104,7 +107,7 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-    function redeemCollateralForDsc() external{}
+    function redeemCollateralForDsc() external {}
 
     function redeemCollateral() external {}
 
@@ -115,5 +118,4 @@ contract DSCEngine is ReentrancyGuard {
     function liquidate() external {}
 
     function getHealthFactor() external view {}
-
 }
