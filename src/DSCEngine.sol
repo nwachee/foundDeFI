@@ -26,6 +26,7 @@ pragma solidity ^0.8.19;
 import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title DSCEngine
@@ -47,19 +48,36 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @notice This contract is based on the MakerDAO DSS system
  */
 contract DSCEngine is ReentrancyGuard {
+    ///////////////
+    // Errors
+    ///////////////
     error DSCEngine__NotZeroAddress();
     error DSCEngine__TransferFailed();
     error DSCEngine__CollateralMustBeGreaterThanZero();
     error DSCEngine__HealthFactorNotMet();
     error DSCEngine__TokenAndPriceFeedAddressMustBeSameLenght();
 
+    ///////////////////
+    // State Variables
+    ///////////////////
+    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
+    uint256 private constant PRECISION = 1e18;
+
     mapping(address token => address priceFeed) private s_priceFeed;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
+    mapping(address user => uint256 amountDscMinted) private s_dscMinted;
+    address[] private s_collateralTokens;
 
     DecentralizedStableCoin private immutable i_dsc;
 
+    ///////////////
+    // Events
+    ////////////////
     event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
 
+    ///////////////////
+    // Modifiers
+    ///////////////////
     modifier morethanZero(uint256 amount) {
         if (amount <= 0) {
             revert DSCEngine__CollateralMustBeGreaterThanZero();
@@ -74,6 +92,9 @@ contract DSCEngine is ReentrancyGuard {
         _;
     }
 
+    ///////////////////
+    // Functions
+    ///////////////////
     constructor(address[] memory tokenAddresses, address[] memory priceFeedAddress, address dscAddress) {
         if (tokenAddresses.length != priceFeedAddress.length) {
             revert DSCEngine__TokenAndPriceFeedAddressMustBeSameLenght();
@@ -81,10 +102,14 @@ contract DSCEngine is ReentrancyGuard {
 
         for (uint256 i = 0; i < tokenAddresses.length; i++) {
             s_priceFeed[tokenAddresses[i]] = priceFeedAddress[i];
+            s_collateralTokens.push(tokenAddresses[i]);
         }
         i_dsc = DecentralizedStableCoin(dscAddress);
     }
 
+    ///////////////////
+    // External Functions
+    ///////////////////
     function depositCollateralAndMintDsc() external {}
 
     /**
@@ -111,11 +136,63 @@ contract DSCEngine is ReentrancyGuard {
 
     function redeemCollateral() external {}
 
-    function mintDsc() external {}
+    /**
+     * @notice Follows CEI.
+     * @param amountDscToMint The amount of DSC to mint
+     * @notice This function allows users to mint DSC by depositing collateral.
+     */
+    function mintDsc(uint256 amountDscToMint) external morethanZero(amountDscToMint) nonReentrant {
+        s_dscMinted[msg.sender] += amountDscToMint;
+    }
 
     function burnDsc() external {}
 
     function liquidate() external {}
 
     function getHealthFactor() external view {}
+
+    //////////////////////////////
+    // Private & Internal View & Pure Functions
+    //////////////////////////////
+    function _getAccountInformation(address user)
+        private
+        view
+        returns (uint256 collateralValueInUsd, uint256 totalDscMinted)
+    {
+        totalDscMinted = s_dscMinted[user];
+        collateralValueInUsd = getAccountCollateralValue(user);
+    }
+
+    /**
+     * @notice This function calculates the health factor of a user.
+     * The health factor is defined as the ratio of the value of collateral to the value of DSC minted.
+     * If the health factor is below a certain threshold, the user is at risk of liquidation.
+     * @param user The address of the user to calculate the health factor for
+     * @return The health factor of the user
+     */
+    function _healthFactor(address user) private view returns (uint256) {}
+
+    function _revertIfHealthFactorNotMet(address user) internal view {
+        // This function will be used to check if the health factor is met before allowing certain actions
+        // It will revert if the health factor is not met
+    }
+
+    //////////////////////////////
+    // Public & External View Functions
+    //////////////////////////////
+    function getAccountCollateralValue(address user) public view returns (uint256 totalCollateralValueInUsd) {
+        //Loop through all collateral tokens, get the amount of each token deposited by the user, map it to the price, to get the total value of collateral in USD
+        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+            address token = s_collateralTokens[i];
+            uint256 amount = s_collateralDeposit[user][token];
+            totalCollateralValueInUsd += getUsdValue(amount, token);
+        }
+        return totalCollateralValueInUsd;
+    }
+
+    function getUsdValue(uint256 amount, address token) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeed[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
 }
