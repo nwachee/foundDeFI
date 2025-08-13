@@ -54,7 +54,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__NotZeroAddress();
     error DSCEngine__TransferFailed();
     error DSCEngine__CollateralMustBeGreaterThanZero();
-    error DSCEngine__HealthFactorNotMet();
+    error DSCEngine__HealthFactorNotMet(uint256 healthFactor);
     error DSCEngine__TokenAndPriceFeedAddressMustBeSameLenght();
 
     ///////////////////
@@ -62,6 +62,9 @@ contract DSCEngine is ReentrancyGuard {
     ///////////////////
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
     uint256 private constant PRECISION = 1e18;
+    uint256 private constant HEALTH_FACTOR_LIQUIDATION_THRESHOLD = 50;
+    uint256 private constant HEALTH_FACTOR_LIQUIDATION_PRECISION = 100;
+    uint256 private constant MIN_HEALTH_FACTOR = 1;
 
     mapping(address token => address priceFeed) private s_priceFeed;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
@@ -143,6 +146,11 @@ contract DSCEngine is ReentrancyGuard {
      */
     function mintDsc(uint256 amountDscToMint) external morethanZero(amountDscToMint) nonReentrant {
         s_dscMinted[msg.sender] += amountDscToMint;
+        _revertIfHealthFactorNotMet(msg.sender);
+        bool minted = i_dsc.mint(msg.sender, amountDscToMint);
+        if (!minted) {
+            revert DSCEngine__TransferFailed();
+        }
     }
 
     function burnDsc() external {}
@@ -170,11 +178,18 @@ contract DSCEngine is ReentrancyGuard {
      * @param user The address of the user to calculate the health factor for
      * @return The health factor of the user
      */
-    function _healthFactor(address user) private view returns (uint256) {}
+    function _healthFactor(address user) private view returns (uint256) {
+        (uint256 collateralValueInUsd, uint256 totalDscMinted) = _getAccountInformation(user);
+        uint256 collateralAdjustedForPrecision =
+            (collateralValueInUsd * HEALTH_FACTOR_LIQUIDATION_THRESHOLD) / HEALTH_FACTOR_LIQUIDATION_PRECISION;
+        return (collateralAdjustedForPrecision * PRECISION) / totalDscMinted;
+    }
 
     function _revertIfHealthFactorNotMet(address user) internal view {
-        // This function will be used to check if the health factor is met before allowing certain actions
-        // It will revert if the health factor is not met
+        uint256 userHealthFactor = _healthFactor(user);
+        if (userHealthFactor < MIN_HEALTH_FACTOR) {
+            revert DSCEngine__HealthFactorNotMet(userHealthFactor);
+        }
     }
 
     //////////////////////////////
