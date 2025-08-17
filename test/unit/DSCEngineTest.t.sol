@@ -19,11 +19,13 @@ contract DSCEngineTest is Test {
 
     address public USER = makeAddr("user");
     uint256 public constant AMOUNT_COLLATERAL = 10 ether;
+    uint256 public constant STARTING_ERC20_AMOUNT = 10 ether;
 
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dsce, config) = deployer.run();
         (ethUsdPriceFeed,, weth,,) = config.activeNetworkConfig();
+        ERC20Mock(weth).mint(USER, STARTING_ERC20_AMOUNT);
     }
 
     /////////////////
@@ -48,5 +50,6 @@ contract DSCEngineTest is Test {
 
         vm.expectRevert(DSCEngine.DSCEngine__CollateralMustBeGreaterThanZero.selector);
         dsce.depositCollateral(weth, 0);
+        vm.stopPrank();
     }
 }
