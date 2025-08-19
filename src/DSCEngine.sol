@@ -51,7 +51,7 @@ contract DSCEngine is ReentrancyGuard {
     ///////////////
     // Errors
     ///////////////
-    error DSCEngine__NotZeroAddress();
+    error DSCEngine__NotAllowedToken();
     error DSCEngine__TransferFailed();
     error DSCEngine__CollateralMustBeGreaterThanZero();
     error DSCEngine__HealthFactorNotMet(uint256 healthFactor);
@@ -95,7 +95,7 @@ contract DSCEngine is ReentrancyGuard {
 
     modifier isTokenAllowed(address token) {
         if (s_priceFeed[token] == address(0)) {
-            revert DSCEngine__NotZeroAddress();
+            revert DSCEngine__NotAllowedToken();
         }
         _;
     }
@@ -230,6 +230,7 @@ contract DSCEngine is ReentrancyGuard {
         if (endingHealthFactor <= startingUserHealthFactor) {
             revert DSCEngine__HealthFactorNotImproved();
         }
+        _revertIfHealthFactorNotMet(msg.sender);
     }
 
     function getHealthFactor() external view {}
@@ -238,6 +239,14 @@ contract DSCEngine is ReentrancyGuard {
     // Private & Internal View & Pure Functions
     //////////////////////////////
 
+    /**
+     * @notice This function burns DSC and updates the user's minted DSC amount.
+     * @param amountDscToBurn The amount of DSC to burn
+     * @param onBehalfOf The address on behalf of which the DSC is being burned
+     * @param dscFrom The address from which the DSC is being burned
+     * @dev Low-level internal function, do not call unless the function calling it is also handling the health factor checks.
+     */
+    // This function is private because it is only called from within the contract.
     function _burnDsc(uint256 amountDscToBurn, address onBehalfOf, address dscFrom) private {
         s_dscMinted[onBehalfOf] -= amountDscToBurn;
         bool success = i_dsc.transferFrom(dscFrom, address(this), amountDscToBurn);
