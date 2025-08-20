@@ -55,6 +55,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine__CollateralMustBeGreaterThanZero();
     error DSCEngine__HealthFactorNotMet(uint256 healthFactor);
+    error DSCEngine__HealthFactorOk(uint256 healthFactor);
     error DSCEngine__HealthFactorNotImproved();
     error DSCEngine__TokenAndPriceFeedAddressMustBeSameLenght();
 
@@ -216,7 +217,7 @@ contract DSCEngine is ReentrancyGuard {
     {
         uint256 startingUserHealthFactor = _healthFactor(user);
         if (startingUserHealthFactor >= MIN_HEALTH_FACTOR) {
-            revert DSCEngine__HealthFactorNotMet(startingUserHealthFactor);
+            revert DSCEngine__HealthFactorOk(startingUserHealthFactor);
         }
 
         uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(collateral, debtToCover);
@@ -233,7 +234,9 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorNotMet(msg.sender);
     }
 
-    function getHealthFactor() external view {}
+    function getHealthFactor(address user) public view returns (uint256) {
+        return _healthFactor(user);
+    }
 
     //////////////////////////////
     // Private & Internal View & Pure Functions
@@ -257,7 +260,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function _redeemCollateral(address tokenCollateral, uint256 amountCollateral, address from, address to) private {
-        s_collateralDeposit[msg.sender][tokenCollateral] -= amountCollateral;
+        s_collateralDeposit[from][tokenCollateral] -= amountCollateral;
         emit CollateralRedeemed(from, to, tokenCollateral, amountCollateral);
         bool success = IERC20(tokenCollateral).transfer(to, amountCollateral);
         if (!success) {
@@ -283,6 +286,12 @@ contract DSCEngine is ReentrancyGuard {
      */
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 collateralValueInUsd, uint256 totalDscMinted) = _getAccountInformation(user);
+
+        if (totalDscMinted == 0) {
+            // If no debt, user has "infinite" health
+            return type(uint256).max;
+        }
+
         uint256 collateralAdjustedForPrecision =
             (collateralValueInUsd * HEALTH_FACTOR_LIQUIDATION_THRESHOLD) / HEALTH_FACTOR_LIQUIDATION_PRECISION;
         return (collateralAdjustedForPrecision * PRECISION) / totalDscMinted;
@@ -318,5 +327,13 @@ contract DSCEngine is ReentrancyGuard {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeed[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
+
+    function getAccountInformation(address user)
+        external
+        view
+        returns (uint256 collateralValueInUsd, uint256 totalDscMinted)
+    {
+        return _getAccountInformation(user);
     }
 }
