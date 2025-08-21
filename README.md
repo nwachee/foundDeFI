@@ -18,3 +18,56 @@ git clone https://github.com/nwachee/foundDeFI.git
 cd foundDeFi
 forge build
 ```
+
+# Usage
+
+## Start a local node
+
+```
+make anvil
+```
+
+## Deploy
+
+This will default to your local node. You need to have it running in another terminal in order for it to deploy.
+
+```
+make deploy
+```
+
+## Testing
+```
+forge test
+```
+
+or
+
+```
+forge test --fork-url $SEPOLIA_RPC_URL
+```
+
+### Test Coverage
+
+```
+forge coverage
+```
+
+# Deployment to a testnet or mainnet
+
+#### 1. **Setup environment variables**
+
+Create a ```.env``` file in the root folder:
+
+```js
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+PRIVATE_KEY=your_private_key_without_0x
+ETHERSCAN_API_KEY=your_etherscan_api_key
+```
+
+**NOTE: FOR DEVELOPMENT, PLEASE USE A PRIVATE KEY THAT DOESN'T HAVE ANY REAL FUNDS ASSOCIATED WITH IT.**
+
+#### 2. **Deploy**
+
+```
+make deploy ARGS="--network sepolia"
+```
