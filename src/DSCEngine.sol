@@ -222,7 +222,7 @@ contract DSCEngine is ReentrancyGuard {
 
         uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(collateral, debtToCover);
 
-        uint256 collateralBonus = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / 100;
+        uint256 collateralBonus = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / HEALTH_FACTOR_LIQUIDATION_PRECISION;
         uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + collateralBonus;
         _redeemCollateral(collateral, totalCollateralToRedeem, user, msg.sender);
         _burnDsc(debtToCover, user, msg.sender);
@@ -232,10 +232,6 @@ contract DSCEngine is ReentrancyGuard {
             revert DSCEngine__HealthFactorNotImproved();
         }
         _revertIfHealthFactorNotMet(msg.sender);
-    }
-
-    function getHealthFactor(address user) public view returns (uint256) {
-        return _healthFactor(user);
     }
 
     //////////////////////////////
@@ -277,24 +273,36 @@ contract DSCEngine is ReentrancyGuard {
         collateralValueInUsd = getAccountCollateralValue(user);
     }
 
+    function _getUsdValue(address token, uint256 amount) private view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeed[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        // 1 ETH = 1000 USD
+        // The returned value from Chainlink will be 1000 * 1e8
+        // Most USD pairs have 8 decimals, so we will just pretend they all do
+        // We want to have everything in terms of WEI, so we add 10 zeros at the end
+        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
+
     /**
      * @notice This function calculates the health factor of a user.
      * The health factor is defined as the ratio of the value of collateral to the value of DSC minted.
      * If the health factor is below a certain threshold, the user is at risk of liquidation.
-     * @param user The address of the user to calculate the health factor for
      * @return The health factor of the user
      */
-    function _healthFactor(address user) private view returns (uint256) {
-        (uint256 collateralValueInUsd, uint256 totalDscMinted) = _getAccountInformation(user);
-
-        if (totalDscMinted == 0) {
-            // If no debt, user has "infinite" health
-            return type(uint256).max;
-        }
-
-        uint256 collateralAdjustedForPrecision =
+    function _calculateHealthFactor(uint256 totalDscMinted, uint256 collateralValueInUsd)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (totalDscMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold =
             (collateralValueInUsd * HEALTH_FACTOR_LIQUIDATION_THRESHOLD) / HEALTH_FACTOR_LIQUIDATION_PRECISION;
-        return (collateralAdjustedForPrecision * PRECISION) / totalDscMinted;
+        return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
+    }
+
+    function _healthFactor(address user) private view returns (uint256) {
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(user);
+        return _calculateHealthFactor(totalDscMinted, collateralValueInUsd);
     }
 
     function _revertIfHealthFactorNotMet(address user) internal view {
@@ -335,5 +343,53 @@ contract DSCEngine is ReentrancyGuard {
         returns (uint256 collateralValueInUsd, uint256 totalDscMinted)
     {
         return _getAccountInformation(user);
+    }
+
+    function calculateHealthFactor(uint256 totalDscMinted, uint256 collateralValueInUsd)
+        external
+        pure
+        returns (uint256)
+    {
+        return _calculateHealthFactor(totalDscMinted, collateralValueInUsd);
+    }
+
+    function getPrecision() external pure returns (uint256) {
+        return PRECISION;
+    }
+
+    function getAdditionalFeedPrecision() external pure returns (uint256) {
+        return ADDITIONAL_FEED_PRECISION;
+    }
+
+    function getLiquidationThreshold() external pure returns (uint256) {
+        return HEALTH_FACTOR_LIQUIDATION_THRESHOLD;
+    }
+
+    function getLiquidationBonus() external pure returns (uint256) {
+        return LIQUIDATION_BONUS;
+    }
+
+    function getLiquidationPrecision() external pure returns (uint256) {
+        return HEALTH_FACTOR_LIQUIDATION_PRECISION;
+    }
+
+    function getMinHealthFactor() external pure returns (uint256) {
+        return MIN_HEALTH_FACTOR;
+    }
+
+    function getCollateralTokens() external view returns (address[] memory) {
+        return s_collateralTokens;
+    }
+
+    function getDsc() external view returns (address) {
+        return address(i_dsc);
+    }
+
+    function getCollateralTokenPriceFeed(address token) external view returns (address) {
+        return s_priceFeed[token];
+    }
+
+    function getHealthFactor(address user) external view returns (uint256) {
+        return _healthFactor(user);
     }
 }
