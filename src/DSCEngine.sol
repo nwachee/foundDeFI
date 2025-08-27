@@ -86,14 +86,11 @@ contract DSCEngine is ReentrancyGuard {
     /// @dev If we know exactly how many tokens we have, we could make this immutable!
     address[] private s_collateralTokens;
 
-
     ///////////////
     // Events
     ////////////////
     event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
-    event CollateralRedeemed(
-        address indexed redeemedFrom, address indexed redeemedTo, address indexed token, uint256 amount
-    );
+    event CollateralRedeemed(address indexed redeemFrom, address indexed redeemTo, address token, uint256 amount);
 
     ///////////////////
     // Modifiers
@@ -163,7 +160,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral)
-       external
+        external
         moreThanZero(amountCollateral)
         nonReentrant
         isTokenAllowed(tokenCollateralAddress)
@@ -255,7 +252,6 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-
     ///////////////////
     // Private Functions
     ///////////////////
@@ -277,7 +273,9 @@ contract DSCEngine is ReentrancyGuard {
         i_dsc.burn(amountDscToBurn);
     }
 
-    function _redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral, address from, address to) private {
+    function _redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral, address from, address to)
+        private
+    {
         s_collateralDeposit[from][tokenCollateralAddress] -= amountCollateral;
         emit CollateralRedeemed(from, to, tokenCollateralAddress, amountCollateral);
         bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
@@ -293,7 +291,7 @@ contract DSCEngine is ReentrancyGuard {
     function _getAccountInformation(address user)
         private
         view
-        returns (uint256 collateralValueInUsd, uint256 totalDscMinted)
+        returns (uint256 totalDscMinted, uint256 collateralValueInUsd)
     {
         totalDscMinted = s_dscMinted[user];
         collateralValueInUsd = getAccountCollateralValue(user);
@@ -372,7 +370,7 @@ contract DSCEngine is ReentrancyGuard {
     function getAccountInformation(address user)
         external
         view
-        returns (uint256 collateralValueInUsd, uint256 totalDscMinted)
+        returns (uint256 totalDscMinted, uint256 collateralValueInUsd)
     {
         return _getAccountInformation(user);
     }
