@@ -16,6 +16,7 @@ contract Handler is Test {
 
     uint256 MAX_DEPOSIT_SIZE = type(uint96).max;
     uint256 public timesMintIsCalled;
+    address[] usersWithCollateralDeposited;
 
     constructor(DSCEngine _dsce, DecentralizedStableCoin _dsc) {
         dsce = _dsce;
@@ -26,27 +27,25 @@ contract Handler is Test {
         wbtc = ERC20Mock(collateralTokens[1]);
     }
 
-    function mintDsc(uint256 amount) public {
-        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dsce.getAccountInformation(msg.sender);
-
-        uint256 halfCollateral = collateralValueInUsd / 2;
-
-        // If we've already minted up to or beyond the allowed threshold, skip.
-        if (halfCollateral <= totalDscMinted) {
+    function mintDsc(uint256 amount, uint256 addressSeed) public {
+        if (usersWithCollateralDeposited.length == 0) {
             return;
         }
 
-        uint256 maxDscToMint = halfCollateral - totalDscMinted;
+        address sender = usersWithCollateralDeposited[addressSeed % usersWithCollateralDeposited.length];
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dsce.getAccountInformation(sender);
 
-        // Nothing to mint
-        if (maxDscToMint == 0) {
+        uint256 maxDscToMint = (collateralValueInUsd / 2) - totalDscMinted;
+        if (maxDscToMint < 0) {
             return;
         }
 
-        // Bound to at least 1 to avoid zero-mint reverts
-        amount = bound(amount, 1, maxDscToMint);
+        amount = bound(amount, 0, maxDscToMint);
+        if (amount <= 0) {
+            return;
+        }
 
-        vm.startPrank(msg.sender);
+        vm.startPrank(sender);
         dsce.mintDsc(amount);
         vm.stopPrank();
         timesMintIsCalled++;
@@ -61,6 +60,8 @@ contract Handler is Test {
         collateral.approve(address(dsce), amountCollateral);
         dsce.depositCollateral(address(collateral), amountCollateral);
         vm.stopPrank();
+
+        usersWithCollateralDeposited.push(msg.sender);
     }
 
     function redeemCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
