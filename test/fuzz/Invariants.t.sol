@@ -47,4 +47,43 @@ contract OpenInvariantsTest is StdInvariant, Test {
 
         assert(wethValue + wbtcValue >= totalSupply);
     }
+
+    function invariant_gettersDoNotRevert() public view {
+        // DSCEngine array/basic getters
+        dsce.getCollateralTokens();
+        dsce.getDsc();
+
+        // Account-related getters
+        dsce.getAccountInformation(address(this));
+        dsce.getHealthFactor(address(this));
+
+        // System constants and precisions
+        dsce.getPrecision();
+        dsce.getAdditionalFeedPrecision();
+        dsce.getLiquidationPrecision();
+        dsce.getLiquidationThreshold();
+        dsce.getLiquidationBonus();
+        dsce.getMinHealthFactor();
+
+        // Token-specific getters and utility views
+        if (weth != address(0)) {
+            dsce.getCollateralBalanceOfUser(weth, address(this));
+            dsce.getCollateralTokenPriceFeed(weth);
+            dsce.getUsdValue(weth, 1e18);
+            dsce.getTokenAmountFromUsd(weth, 1e18);
+        }
+        if (wbtc != address(0)) {
+            dsce.getCollateralBalanceOfUser(wbtc, address(this));
+            dsce.getCollateralTokenPriceFeed(wbtc);
+            dsce.getUsdValue(wbtc, 1e18);
+            dsce.getTokenAmountFromUsd(wbtc, 1e18);
+        }
+
+        // DecentralizedStableCoin (ERC20) getters
+        dsc.totalSupply();
+        dsc.balanceOf(address(this));
+        dsc.name();
+        dsc.symbol();
+        dsc.decimals();
+    }
 }
